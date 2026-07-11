@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#b7092f">
+  <title>NSHM OMR - Chấm bài trắc nghiệm</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="{{ url_for('index') }}">
+        <img src="{{ url_for('static', filename='nshm-logo.png') }}" alt="Phù hiệu NSHM">
+        <span><strong>NSHM OMR</strong><small>Chấm thi nội bộ</small></span>
+      </a>
+      <div class="local-state"><span></span> OMR v1.0 local</div>
+    </header>
+
+    {% if error %}<div class="alert"><strong>Không thể xử lý:</strong> {{ error }}</div>{% endif %}
+
+    <form id="batch-form" class="workspace" action="{{ url_for('batch_grade') }}" method="post" enctype="multipart/form-data">
+      <section class="panel upload-panel">
+        <div class="panel-heading">
+          <div><p class="kicker">DỮ LIỆU ĐẦU VÀO</p><h2>PDF bài làm</h2></div>
+          <span class="template-chip">Mẫu NSHM v1</span>
+        </div>
+        <label class="dropzone" id="dropzone">
+          <input id="batch-pdf" type="file" name="batch_pdf" accept="application/pdf,.pdf" required>
+          <span class="drop-icon">PDF</span>
+          <strong id="file-title">Thả file CamScanner vào đây</strong>
+          <small id="file-meta">hoặc chọn một PDF từ máy tính</small>
+          <span class="choose-button">Chọn file PDF</span>
+        </label>
+        <div class="preflight-list">
+          <div><span>4</span><p><b>Đủ bốn mốc góc</b><small>Bài thiếu góc sẽ bị từ chối</small></p></div>
+          <div><span>◐</span><p><b>Ánh sáng tự thích nghi</b><small>Đánh giá riêng từng vùng tô</small></p></div>
+          <div><span>✓</span><p><b>Không đoán đáp án</b><small>Ô không chắc chắn chuyển kiểm tra</small></p></div>
+        </div>
+      </section>
+
+      <section class="panel key-panel">
+        <div class="panel-heading">
+          <div><p class="kicker">CẤU HÌNH KỲ THI</p><h2>Đáp án chuẩn</h2></div>
+          <button class="add-key-button" id="add-key" type="button">+ Thêm mã đề</button>
+        </div>
+        <div class="key-tabs" id="key-tabs">
+          {% for key in exam_keys %}<button class="key-tab{% if loop.first %} active{% endif %}" type="button" data-key-index="{{ loop.index0 }}">{{ key.code or 'Mã mới' }}</button>{% endfor %}
+        </div>
+        <div id="key-panels">
+        {% for key in exam_keys %}
+          <section class="key-set{% if loop.first %} active{% endif %}" data-key-panel="{{ loop.index0 }}">
+            <div class="code-row"><label class="field"><span>Mã đề · đúng 4 chữ số</span><input class="exam-code-input" name="exam_code" value="{{ key.code }}" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required></label>{% if not loop.first %}<button class="remove-key" type="button">Xóa mã</button>{% endif %}</div>
+            <label class="field full"><span>Phần I · 40 câu A/B/C/D</span><textarea name="section1" rows="4" spellcheck="false" required>{{ key.section1 }}</textarea><small>Có thể phân cách bằng dấu cách, dấu phẩy hoặc xuống dòng.</small></label>
+            <div class="key-grid">
+              <label class="field"><span>Phần II · 8 dòng Đúng/Sai</span><textarea name="section2" rows="9" spellcheck="false" required>{{ key.section2 }}</textarea><small>Mỗi dòng 4 ký tự D hoặc S theo a–d.</small></label>
+              <label class="field"><span>Phần III · 6 đáp án ngắn</span><textarea name="section3" rows="9" spellcheck="false" required>{{ key.section3 }}</textarea><small>Hỗ trợ số âm và dấu phẩy thập phân.</small></label>
+            </div>
+          </section>
+        {% endfor %}
+        </div>
+        <button class="primary-action" id="submit-button" type="submit"><span>Chấm toàn bộ PDF</span><small>Tiền xử lý và tạo overlay</small></button>
+        <p class="submit-note" id="submit-note">Dữ liệu chỉ được xử lý và lưu tạm trên máy tính này.</p>
+      </section>
+    </form>
+    <footer class="copyright">
+      <span>Bản quyền © <a href="https://www.facebook.com/desc2411" target="_blank" rel="noopener noreferrer">Nguyễn Trường Chinh</a></span>
+      <a class="google-mail" href="mailto:truongchinh2k3@gmail.com" aria-label="Gửi email đến Nguyễn Trường Chinh" title="truongchinh2k3@gmail.com">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.92h5.38a4.6 4.6 0 0 1-2 3.02v2.54h3.24c1.9-1.75 2.98-4.33 2.98-7.41Z"/><path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.36l-3.24-2.54c-.9.6-2.05.96-3.38.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.62A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.39 13.93A6.02 6.02 0 0 1 6.07 12c0-.67.12-1.32.32-1.93V7.45H3.04A10 10 0 0 0 2 12c0 1.64.39 3.19 1.04 4.55l3.35-2.62Z"/><path fill="#EA4335" d="M12 5.94c1.47 0 2.79.51 3.83 1.5l2.87-2.88A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.96 5.45l3.35 2.62C7.18 7.7 9.39 5.94 12 5.94Z"/></svg>
+      </a>
+    </footer>
+  </main>
+  <script>
+    const input = document.querySelector('#batch-pdf');
+    const zone = document.querySelector('#dropzone');
+    const title = document.querySelector('#file-title');
+    const meta = document.querySelector('#file-meta');
+    const showFile = file => {
+      if (!file) return;
+      title.textContent = file.name;
+      meta.textContent = `${(file.size / 1048576).toFixed(1)} MB · Sẵn sàng xử lý`;
+      zone.classList.add('has-file');
+    };
+    input.addEventListener('change', () => showFile(input.files[0]));
+    ['dragenter', 'dragover'].forEach(name => zone.addEventListener(name, event => { event.preventDefault(); zone.classList.add('dragging'); }));
+    ['dragleave', 'drop'].forEach(name => zone.addEventListener(name, event => { event.preventDefault(); zone.classList.remove('dragging'); }));
+    zone.addEventListener('drop', event => { input.files = event.dataTransfer.files; showFile(input.files[0]); });
+    const tabs = document.querySelector('#key-tabs');
+    const panels = document.querySelector('#key-panels');
+    const activateKey = index => {
+      document.querySelectorAll('.key-tab').forEach(tab => tab.classList.toggle('active', tab.dataset.keyIndex === String(index)));
+      document.querySelectorAll('.key-set').forEach(panel => panel.classList.toggle('active', panel.dataset.keyPanel === String(index)));
+    };
+    tabs.addEventListener('click', event => { const tab = event.target.closest('.key-tab'); if (tab) activateKey(tab.dataset.keyIndex); });
+    panels.addEventListener('input', event => {
+      if (!event.target.classList.contains('exam-code-input')) return;
+      event.target.value = event.target.value.replace(/\D/g, '').slice(0, 4);
+      const panel = event.target.closest('.key-set');
+      tabs.querySelector(`[data-key-index="${panel.dataset.keyPanel}"]`).textContent = event.target.value || 'Mã mới';
+    });
+    panels.addEventListener('click', event => {
+      const button = event.target.closest('.remove-key'); if (!button) return;
+      const panel = button.closest('.key-set'); const index = panel.dataset.keyPanel;
+      tabs.querySelector(`[data-key-index="${index}"]`).remove(); panel.remove();
+      const first = document.querySelector('.key-tab'); if (first) activateKey(first.dataset.keyIndex);
+    });
+    document.querySelector('#add-key').addEventListener('click', () => {
+      const source = document.querySelector('.key-set.active');
+      const index = String(Math.max(-1, ...[...document.querySelectorAll('.key-set')].map(item => Number(item.dataset.keyPanel))) + 1);
+      const panel = source.cloneNode(true); panel.dataset.keyPanel = index; panel.classList.add('active');
+      panel.querySelector('.exam-code-input').value = ''; panel.querySelector('.remove-key')?.remove();
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'remove-key'; remove.textContent = 'Xóa mã'; panel.querySelector('.code-row').append(remove);
+      panels.append(panel);
+      const tab = document.createElement('button'); tab.type = 'button'; tab.className = 'key-tab'; tab.dataset.keyIndex = index; tab.textContent = 'Mã mới'; tabs.append(tab); activateKey(index); panel.querySelector('.exam-code-input').focus();
+    });
+    document.querySelector('#batch-form').addEventListener('submit', () => {
+      const button = document.querySelector('#submit-button');
+      button.disabled = true;
+      button.querySelector('span').textContent = 'Đang chấm bài…';
+      document.querySelector('#submit-note').textContent = 'Vui lòng giữ cửa sổ mở. PDF nhiều trang có thể cần vài phút.';
+    });
+  </script>
+</body>
+</html>

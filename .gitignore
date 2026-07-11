@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.DS_Store
+instance/
+certs/*.pem
+certs/*.crt
+certs/*.key
+build/
+dist/
+tmp/
+.venv/

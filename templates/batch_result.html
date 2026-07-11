@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kết quả {{ batch.filename }} · NSHM OMR</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+<main class="app-shell result-shell">
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='nshm-logo.png') }}" alt="Phù hiệu NSHM"><span><strong>NSHM OMR</strong><small>Chấm thi nội bộ</small></span></a>
+    <div class="header-actions"><a class="secondary-action" href="{{ url_for('index') }}">Chấm file khác</a><a class="secondary-action" href="{{ url_for('batch_export', batch_id=batch.id) }}">Xuất chi tiết</a><a class="export-action" href="{{ url_for('batch_export_binary', batch_id=batch.id) }}">Xuất 0/1</a></div>
+  </header>
+
+  <section class="result-hero">
+    <div><p class="kicker">KẾT QUẢ LÔ BÀI</p><h1>{{ batch.filename }}</h1><p>{{ batch.page_count }} trang đã được tiền xử lý và đối chiếu với mẫu cố định.</p></div>
+    <div class="summary-grid">
+      <div class="summary-card total"><b>{{ batch.page_count }}</b><span>Tổng số bài</span></div>
+      <div class="summary-card accepted"><b>{{ batch.accepted_count }}</b><span>Đạt kiểm tra</span></div>
+      <div class="summary-card review"><b>{{ batch.review_count }}</b><span>Cần xem lại</span></div>
+      <div class="summary-card rejected"><b>{{ batch.rejected_count }}</b><span>Bị từ chối</span></div>
+    </div>
+  </section>
+
+  <section class="result-toolbar">
+    <div class="filter-group"><button class="filter active" data-filter="all">Tất cả</button><button class="filter" data-filter="review">Cần xem lại</button><button class="filter" data-filter="rejected">Bị từ chối</button><button class="filter" data-filter="accepted">Đạt</button></div>
+    <label class="search-box">⌕ <input id="student-search" placeholder="Tìm mã học sinh"></label>
+  </section>
+
+  <section class="page-list" id="page-list">
+  {% for page in batch.pages %}
+    <article class="page-card status-{{ page.status }}" data-status="{{ page.status }}" data-student="{{ page.student_id }}">
+      <div class="page-index"><span>TRANG</span><b>{{ '%02d'|format(page.page) }}</b></div>
+      <div class="page-preview">
+        {% if page.overlay_image %}<img loading="lazy" src="{{ url_for('batch_asset', batch_id=batch.id, filename=page.overlay_image) }}" alt="Overlay trang {{ page.page }}">{% else %}<div class="preview-missing">Không tạo được overlay</div>{% endif %}
+      </div>
+      <div class="page-data">
+        <div class="page-data-head">
+          <div><span class="status-badge">{% if page.status == 'accepted' %}Đạt kiểm tra{% elif page.status == 'review' %}Cần xem lại{% else %}Bị từ chối{% endif %}</span><h2>Học sinh {{ page.student_id }}</h2><p>Mã đề <strong>{{ page.exam_code }}</strong></p></div>
+          <div class="score-block"><b>{{ page.score_10 if page.score_10 is not none else '—' }}</b><span>điểm</span></div>
+        </div>
+        {% if page.review_reasons %}<div class="review-note"><b>Lý do kiểm tra</b>{% for reason in page.review_reasons %}<span>{{ reason }}</span>{% endfor %}</div>{% endif %}
+        <div class="answer-summary"><div><span>Phần I</span><code>{{ page.section1_answers }}</code></div><div><span>Phần II</span><code>{{ page.section2_answers }}</code></div><div><span>Phần III</span><code>{{ page.section3_answers }}</code></div></div>
+        <details class="diagnostics"><summary>Thông số tiền xử lý</summary><div class="diagnostic-grid"><span>Chất lượng <b>{{ page.quality.score|default(0) }}%</b></span><span>Mốc nội bộ <b>{{ page.quality.guide_marker_count|default('—') }}</b></span><span>Độ nét <b>{{ page.quality.sharpness|default('—') }}</b></span><span>Sáng trung bình <b>{{ page.quality.brightness|default('—') }}</b></span></div></details>
+        <div class="image-links"><a target="_blank" href="{{ url_for('batch_asset', batch_id=batch.id, filename=page.original_image) }}">Ảnh gốc</a>{% if page.overlay_image %}<a target="_blank" href="{{ url_for('batch_asset', batch_id=batch.id, filename=page.overlay_image) }}">Mở overlay lớn</a>{% endif %}</div>
+      </div>
+    </article>
+  {% endfor %}
+  </section>
+  <div class="empty-filter" id="empty-filter" hidden>Không có bài phù hợp bộ lọc.</div>
+  <footer class="copyright">
+    <span>Bản quyền © <a href="https://www.facebook.com/desc2411" target="_blank" rel="noopener noreferrer">Nguyễn Trường Chinh</a></span>
+    <a class="google-mail" href="mailto:truongchinh2k3@gmail.com" aria-label="Gửi email đến Nguyễn Trường Chinh" title="truongchinh2k3@gmail.com">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.4-.18-2.07H12v3.92h5.38a4.6 4.6 0 0 1-2 3.02v2.54h3.24c1.9-1.75 2.98-4.33 2.98-7.41Z"/><path fill="#34A853" d="M12 22c2.7 0 4.97-.9 6.62-2.36l-3.24-2.54c-.9.6-2.05.96-3.38.96-2.61 0-4.82-1.76-5.61-4.13H3.04v2.62A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.39 13.93A6.02 6.02 0 0 1 6.07 12c0-.67.12-1.32.32-1.93V7.45H3.04A10 10 0 0 0 2 12c0 1.64.39 3.19 1.04 4.55l3.35-2.62Z"/><path fill="#EA4335" d="M12 5.94c1.47 0 2.79.51 3.83 1.5l2.87-2.88A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.96 5.45l3.35 2.62C7.18 7.7 9.39 5.94 12 5.94Z"/></svg>
+    </a>
+  </footer>
+</main>
+<script>
+  const cards = [...document.querySelectorAll('.page-card')];
+  const search = document.querySelector('#student-search');
+  let filter = 'all';
+  function applyFilters() {
+    const query = search.value.trim().toLowerCase(); let visible = 0;
+    cards.forEach(card => { const show = (filter === 'all' || card.dataset.status === filter) && card.dataset.student.toLowerCase().includes(query); card.hidden = !show; if (show) visible++; });
+    document.querySelector('#empty-filter').hidden = visible !== 0;
+  }
+  document.querySelectorAll('.filter').forEach(button => button.addEventListener('click', () => { document.querySelector('.filter.active').classList.remove('active'); button.classList.add('active'); filter = button.dataset.filter; applyFilters(); }));
+  search.addEventListener('input', applyFilters);
+</script>
+</body>
+</html>

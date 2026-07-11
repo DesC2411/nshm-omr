@@ -1,0 +1,71 @@
+name: Build NSHM OMR for Windows x64
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python x64
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: "x64"
+          cache: pip
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller==6.19.0
+
+      - name: Run automated tests
+        run: python -m unittest tests.test_synthetic -v
+
+      - name: Build Windows executable
+        run: pyinstaller --clean --noconfirm NSHM-OMR-Windows.spec
+
+      - name: Smoke test executable
+        shell: pwsh
+        run: |
+          $process = Start-Process -FilePath "dist\NSHM OMR.exe" -PassThru
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                $response = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5050/
+                if ($response.StatusCode -eq 200 -and $response.Content -match "OMR v1.0 local") {
+                  $ready = $true
+                  break
+                }
+              } catch {}
+            }
+            if (-not $ready) { throw "Ứng dụng đóng gói không khởi động được local server." }
+          } finally {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Create portable ZIP
+        shell: pwsh
+        run: Compress-Archive -Path "dist\NSHM OMR.exe" -DestinationPath "dist\NSHM-OMR-v1.0-windows-x64.zip" -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NSHM-OMR-v1.0-windows-x64
+          path: dist/NSHM-OMR-v1.0-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 30

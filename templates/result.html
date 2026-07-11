@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#c5113a">
+    <title>Kết quả chấm phiếu</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <main class="page">
+      <header class="masthead">
+        <div class="brand">
+          <div class="brand-mark">
+            <img src="{{ url_for('static', filename='nshm-logo.png') }}" alt="Phù hiệu Trường Ngôi Sao Hoàng Mai">
+          </div>
+          <div class="brand-copy">
+            <p class="eyebrow">Trường Ngôi Sao Hoàng Mai</p>
+            <h1 class="brand-title">Kết quả chấm phiếu</h1>
+            <p class="brand-subtitle">Vòng đỏ là ô OCR nhận là bài làm, vòng xanh là đáp án đúng theo đáp án chuẩn.</p>
+          </div>
+        </div>
+        <a class="ghost-link" href="{{ url_for('index') }}">Chấm phiếu khác</a>
+      </header>
+
+      <section class="surface hero-panel result-hero">
+        <div class="hero-main">
+          <p class="eyebrow">Kết quả nhận dạng</p>
+          <h2>Phiếu đã được chấm và đối chiếu trực quan.</h2>
+          <p class="lead">
+            Hệ thống đã đọc xong vùng thông tin phía trên cùng toàn bộ 3 phần bài làm. Bạn có thể đối chiếu nhanh bằng
+            overlay hoặc xem chi tiết từng câu ở bảng bên dưới.
+          </p>
+          <div class="hero-pills">
+            <span class="pill strong">Mã học sinh {{ result.student_id }}</span>
+            <span class="pill strong">Mã đề {{ result.exam_code }}</span>
+            <span class="pill strong">Điểm quy đổi {{ result.totals.score_10 }}</span>
+          </div>
+        </div>
+
+        <aside class="hero-side legend-panel">
+          <p class="eyebrow">Chú giải overlay</p>
+          <h3>Đọc nhanh ngay trên ảnh</h3>
+          <div class="legend-list">
+            <div class="legend-item">
+              <span class="legend-swatch legend-red"></span>
+              <span>Ô mà OCR xác nhận thí sinh đã tô</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch legend-green"></span>
+              <span>Ô đáp án đúng theo key chấm</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-swatch legend-blue"></span>
+              <span>Lưới ô đọc chuẩn theo template</span>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="stats">
+        <article class="stat-card surface">
+          <span>Tổng điểm quy đổi</span>
+          <strong>{{ result.totals.score_10 }}</strong>
+          <small>{{ result.totals.overall.correct }}/{{ result.totals.overall.total }} đơn vị đúng</small>
+        </article>
+        <article class="stat-card surface">
+          <span>Phần I</span>
+          <strong>{{ result.totals.section1.correct }}/{{ result.totals.section1.total }}</strong>
+          <small>40 câu A/B/C/D</small>
+        </article>
+        <article class="stat-card surface">
+          <span>Phần II</span>
+          <strong>{{ result.totals.section2.correct }}/{{ result.totals.section2.total }}</strong>
+          <small>32 ý đúng/sai</small>
+        </article>
+        <article class="stat-card surface">
+          <span>Phần III</span>
+          <strong>{{ result.totals.section3.correct }}/{{ result.totals.section3.total }}</strong>
+          <small>6 câu trả lời ngắn</small>
+        </article>
+      </section>
+
+      <section class="result-layout">
+        <article class="surface overlay-card">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Ảnh kiểm tra</p>
+              <h2>Overlay vùng đọc</h2>
+            </div>
+          </div>
+          <div class="overlay-frame">
+            <img class="overlay" src="data:image/png;base64,{{ result.overlay_base64 }}" alt="Ảnh overlay kết quả chấm">
+          </div>
+          <p class="caption">
+            Ngưỡng tô hiện tại: {{ result.calibration.threshold }} · Biên phân biệt: {{ result.calibration.margin }}.
+          </p>
+        </article>
+
+        <div class="detail-stack">
+          <section class="surface table-card">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Đối chiếu chi tiết</p>
+                <h2>Phần I</h2>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Câu</th>
+                    <th>Đáp án</th>
+                    <th>Bài làm</th>
+                    <th>Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in result.section1 %}
+                  <tr class="{{ 'ok' if item.correct else 'bad' }}">
+                    <td>{{ item.question }}</td>
+                    <td>{{ item.expected }}</td>
+                    <td>{{ item.selected }}</td>
+                    <td>{{ 'Đúng' if item.correct else item.status }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="surface table-card">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Đối chiếu chi tiết</p>
+                <h2>Phần II</h2>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Câu</th>
+                    <th>Ý</th>
+                    <th>Đáp án</th>
+                    <th>Bài làm</th>
+                    <th>Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in result.section2 %}
+                  <tr class="{{ 'ok' if item.correct else 'bad' }}">
+                    <td>{{ item.question }}</td>
+                    <td>{{ item.statement }}</td>
+                    <td>{{ item.expected }}</td>
+                    <td>{{ item.selected }}</td>
+                    <td>{{ 'Đúng' if item.correct else item.status }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="surface table-card">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Đối chiếu chi tiết</p>
+                <h2>Phần III</h2>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Câu</th>
+                    <th>Đáp án</th>
+                    <th>Bài làm</th>
+                    <th>Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in result.section3 %}
+                  <tr class="{{ 'ok' if item.correct else 'bad' }}">
+                    <td>{{ item.question }}</td>
+                    <td>{{ item.expected }}</td>
+                    <td>{{ item.selected }}</td>
+                    <td>{{ 'Đúng' if item.correct else item.status }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
