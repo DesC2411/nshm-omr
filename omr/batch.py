@@ -4,9 +4,12 @@ import base64
 import csv
 import io
 import json
+import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+from xml.sax.saxutils import escape
 
 import fitz
 
@@ -148,25 +151,182 @@ class BatchProcessor:
             )
         return ("\ufeff" + output.getvalue()).encode("utf-8")
 
-    def export_binary_csv(self, batch_id: str) -> bytes:
+    def export_binary_xlsx(self, batch_id: str) -> bytes:
         batch = self.load(batch_id)
-        output = io.StringIO()
-        writer = csv.writer(output)
-        headers = ["STT", "SBD", "Mã đề", "Điểm", "Trạng thái"]
-        headers += [f"I.{question}" for question in range(1, 41)]
-        headers += [f"II.{question}{statement}" for question in range(1, 9) for statement in "abcd"]
-        headers += [f"III.{question}" for question in range(1, 7)]
-        writer.writerow(headers)
+        headers = self._binary_headers()
+        rows: list[list[Any]] = []
         for page in batch["pages"]:
             sections = page["sections"]
             binary = [int(item.get("correct", False)) for item in sections["section1"]]
             binary += [int(item.get("correct", False)) for item in sections["section2"]]
             binary += [int(item.get("correct", False)) for item in sections["section3"]]
-            writer.writerow(
-                [page["page"], page["student_id"], page["exam_code"],
-                 "" if page["score_10"] is None else page["score_10"], page["status"], *binary]
+            binary += [""] * (78 - len(binary))
+            totals = page.get("totals") or {}
+            part1 = totals.get("section1") or {}
+            part2 = totals.get("section2") or {}
+            part3 = totals.get("section3") or {}
+            overall = totals.get("overall") or {}
+            status = {"accepted": "ok", "review": "review", "rejected": "error"}.get(
+                page["status"], page["status"]
             )
-        return ("\ufeff" + output.getvalue()).encode("utf-8")
+            rows.append(
+                [
+                    status,
+                    "; ".join(page.get("review_reasons") or []),
+                    batch["filename"],
+                    batch["filename"],
+                    page["page"],
+                    f"Trang {page['page']}",
+                    f"{batch_id}/page_{page['page']:04d}",
+                    f"{batch_id}/results.json",
+                    page["student_id"],
+                    page["exam_code"],
+                    *binary[:78],
+                    part1.get("correct", ""),
+                    part1.get("total", ""),
+                    part2.get("correct", ""),
+                    part2.get("total", ""),
+                    part3.get("correct", ""),
+                    part3.get("total", ""),
+                    overall.get("correct", ""),
+                    overall.get("total", ""),
+                ]
+            )
+        return self._write_xlsx(headers, rows)
+
+    @staticmethod
+    def _binary_headers() -> list[str]:
+        headers = [
+            "status", "error", "file_name", "file_path", "page_number",
+            "page_label", "output_dir", "results_json", "sbd", "exam_code",
+        ]
+        headers += [f"part1_{question}" for question in range(1, 41)]
+        headers += [
+            f"part2_{question}{statement}"
+            for question in range(1, 9)
+            for statement in "abcd"
+        ]
+        headers += [f"part3_{question}" for question in range(1, 7)]
+        headers += [
+            "part1_score", "part1_max_score", "part2_score", "part2_max_score",
+            "part3_score", "part3_max_score", "total_score", "max_score",
+        ]
+        return headers
+
+    @classmethod
+    def _write_xlsx(cls, headers: list[str], rows: list[list[Any]]) -> bytes:
+        sheet_rows = [headers, *rows]
+        last_column = cls._xlsx_column_name(len(headers))
+        row_xml: list[str] = []
+        for row_number, values in enumerate(sheet_rows, start=1):
+            cells = [
+                cls._xlsx_cell_xml(
+                    row_number,
+                    column_number,
+                    value,
+                    style_index=1 if row_number == 1 else 0,
+                )
+                for column_number, value in enumerate(values, start=1)
+            ]
+            row_xml.append(f'<row r="{row_number}">{"".join(filter(None, cells))}</row>')
+
+        sheet_xml = (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            f'<dimension ref="A1:{last_column}{max(len(sheet_rows), 1)}"/>'
+            '<sheetViews><sheetView workbookViewId="0">'
+            '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>'
+            '<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>'
+            '</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>'
+            f'<sheetData>{"".join(row_xml)}</sheetData>'
+            f'<autoFilter ref="A1:{last_column}{max(len(sheet_rows), 1)}"/>'
+            '</worksheet>'
+        )
+        created_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("[Content_Types].xml", cls._xlsx_content_types())
+            archive.writestr("_rels/.rels", cls._xlsx_root_rels())
+            archive.writestr("docProps/app.xml", cls._xlsx_app_props())
+            archive.writestr("docProps/core.xml", cls._xlsx_core_props(created_at))
+            archive.writestr("xl/workbook.xml", cls._xlsx_workbook())
+            archive.writestr("xl/_rels/workbook.xml.rels", cls._xlsx_workbook_rels())
+            archive.writestr("xl/styles.xml", cls._xlsx_styles())
+            archive.writestr("xl/worksheets/sheet1.xml", sheet_xml)
+        return output.getvalue()
+
+    @staticmethod
+    def _xlsx_column_name(column_number: int) -> str:
+        name = ""
+        while column_number:
+            column_number, remainder = divmod(column_number - 1, 26)
+            name = chr(65 + remainder) + name
+        return name
+
+    @classmethod
+    def _xlsx_cell_xml(
+        cls, row_number: int, column_number: int, value: Any, style_index: int = 0
+    ) -> str:
+        if value is None or value == "":
+            return ""
+        cell_ref = f"{cls._xlsx_column_name(column_number)}{row_number}"
+        style = f' s="{style_index}"' if style_index else ""
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return f'<c r="{cell_ref}"{style}><v>{value}</v></c>'
+        safe_text = escape(str(value))
+        return (
+            f'<c r="{cell_ref}" t="inlineStr"{style}>'
+            f'<is><t xml:space="preserve">{safe_text}</t></is></c>'
+        )
+
+    @staticmethod
+    def _xlsx_content_types() -> str:
+        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>'''
+
+    @staticmethod
+    def _xlsx_root_rels() -> str:
+        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>'''
+
+    @staticmethod
+    def _xlsx_app_props() -> str:
+        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>NSHM OMR</Application></Properties>'''
+
+    @staticmethod
+    def _xlsx_core_props(created_at: str) -> str:
+        return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<dc:creator>NSHM OMR</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">{created_at}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">{created_at}</dcterms:modified></cp:coreProperties>'''
+
+    @staticmethod
+    def _xlsx_workbook() -> str:
+        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Summary" sheetId="1" r:id="rId1"/></sheets></workbook>'''
+
+    @staticmethod
+    def _xlsx_workbook_rels() -> str:
+        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'''
+
+    @staticmethod
+    def _xlsx_styles() -> str:
+        return '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'''
 
     def _batch_dir(self, batch_id: str) -> Path:
         if not batch_id.isalnum():

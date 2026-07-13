@@ -264,17 +264,17 @@ def batch_export(batch_id: str):
     )
 
 
-@app.get("/batch/<batch_id>/export-01.csv")
+@app.get("/batch/<batch_id>/export-01.xlsx")
 def batch_export_binary(batch_id: str):
     try:
-        data = batch_processor.export_binary_csv(batch_id)
+        data = batch_processor.export_binary_xlsx(batch_id)
     except FileNotFoundError:
         abort(404)
     return send_file(
         BytesIO(data),
-        mimetype="text/csv; charset=utf-8",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,
-        download_name=f"ket-qua-0-1-{batch_id}.csv",
+        download_name=f"summary-{batch_id}.xlsx",
     )
 
 

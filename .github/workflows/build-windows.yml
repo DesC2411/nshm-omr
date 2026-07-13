@@ -3,6 +3,8 @@ name: Build NSHM OMR for Windows x64
 on:
   workflow_dispatch:
   push:
+    branches:
+      - "main"
     tags:
       - "v*"
 
@@ -33,7 +35,7 @@ jobs:
           python -m pip install -r requirements.txt pyinstaller==6.19.0
 
       - name: Run automated tests
-        run: python -m unittest tests.test_synthetic -v
+        run: python -m unittest discover -s tests -v
 
       - name: Build Windows executable
         run: pyinstaller --clean --noconfirm NSHM-OMR-Windows.spec
@@ -61,12 +63,12 @@ jobs:
 
       - name: Create portable ZIP
         shell: pwsh
-        run: Compress-Archive -Path "dist\NSHM OMR.exe" -DestinationPath "dist\NSHM-OMR-v1.0-windows-x64.zip" -Force
+        run: Compress-Archive -Path "dist\NSHM OMR.exe" -DestinationPath "dist\NSHM-OMR-v1.0.3-windows-x64.zip" -Force
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NSHM-OMR-v1.0-windows-x64
-          path: dist/NSHM-OMR-v1.0-windows-x64.zip
+          name: NSHM-OMR-v1.0.3-windows-x64
+          path: dist/NSHM-OMR-v1.0.3-windows-x64.zip
           if-no-files-found: error
           retention-days: 30

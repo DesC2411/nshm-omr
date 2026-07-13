@@ -51,7 +51,6 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch="arm64",
     codesign_identity=None,
     entitlements_file=None,
     icon=str(root / "build_assets" / "NSHM-OMR.icns"),
@@ -72,8 +71,8 @@ app = BUNDLE(
     bundle_identifier="vn.edu.nshm.omr",
     info_plist={
         "CFBundleDisplayName": "NSHM OMR",
-        "CFBundleShortVersionString": "1.0.0",
-        "CFBundleVersion": "1",
+        "CFBundleShortVersionString": "1.0.3",
+        "CFBundleVersion": "3",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "12.0",
     },

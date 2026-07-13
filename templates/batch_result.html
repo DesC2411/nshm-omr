@@ -11,7 +11,7 @@
 <main class="app-shell result-shell">
   <header class="topbar">
     <a class="brand" href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='nshm-logo.png') }}" alt="Phù hiệu NSHM"><span><strong>NSHM OMR</strong><small>Chấm thi nội bộ</small></span></a>
-    <div class="header-actions"><a class="secondary-action" href="{{ url_for('index') }}">Chấm file khác</a><a class="secondary-action" href="{{ url_for('batch_export', batch_id=batch.id) }}">Xuất chi tiết</a><a class="export-action" href="{{ url_for('batch_export_binary', batch_id=batch.id) }}">Xuất 0/1</a></div>
+    <div class="header-actions"><a class="secondary-action" href="{{ url_for('index') }}">Chấm file khác</a><a class="secondary-action" href="{{ url_for('batch_export', batch_id=batch.id) }}">Xuất chi tiết</a><a class="export-action" href="{{ url_for('batch_export_binary', batch_id=batch.id) }}">Xuất Excel 0/1</a></div>
   </header>
 
   <section class="result-hero">
