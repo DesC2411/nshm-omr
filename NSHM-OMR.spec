@@ -71,8 +71,8 @@ app = BUNDLE(
     bundle_identifier="vn.edu.nshm.omr",
     info_plist={
         "CFBundleDisplayName": "NSHM OMR",
-        "CFBundleShortVersionString": "1.0.3",
-        "CFBundleVersion": "3",
+        "CFBundleShortVersionString": "1.0.4",
+        "CFBundleVersion": "4",
         "NSHighResolutionCapable": True,
         "LSMinimumSystemVersion": "12.0",
     },

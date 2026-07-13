@@ -250,21 +250,7 @@ def batch_asset(batch_id: str, filename: str):
     return send_file(path)
 
 
-@app.get("/batch/<batch_id>/export.csv")
-def batch_export(batch_id: str):
-    try:
-        data = batch_processor.export_csv(batch_id)
-    except FileNotFoundError:
-        abort(404)
-    return send_file(
-        BytesIO(data),
-        mimetype="text/csv; charset=utf-8",
-        as_attachment=True,
-        download_name=f"ket-qua-omr-{batch_id}.csv",
-    )
-
-
-@app.get("/batch/<batch_id>/export-01.xlsx")
+@app.get("/batch/<batch_id>/export.xlsx")
 def batch_export_binary(batch_id: str):
     try:
         data = batch_processor.export_binary_xlsx(batch_id)

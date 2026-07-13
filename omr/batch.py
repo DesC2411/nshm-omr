@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import csv
 import io
 import json
 import zipfile
@@ -117,39 +116,6 @@ class BatchProcessor:
         if path.parent != batch_dir.resolve() or not path.is_file():
             raise FileNotFoundError(filename)
         return path
-
-    def export_csv(self, batch_id: str) -> bytes:
-        batch = self.load(batch_id)
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(
-            [
-                "Trang",
-                "Trạng thái",
-                "Mã học sinh",
-                "Mã đề",
-                "Điểm",
-                "Phần I",
-                "Phần II",
-                "Phần III",
-                "Lý do cần kiểm tra",
-            ]
-        )
-        for page in batch["pages"]:
-            writer.writerow(
-                [
-                    page["page"],
-                    page["status"],
-                    page["student_id"],
-                    page["exam_code"],
-                    "" if page["score_10"] is None else page["score_10"],
-                    page["section1_answers"],
-                    page["section2_answers"],
-                    page["section3_answers"],
-                    "; ".join(page["review_reasons"]),
-                ]
-            )
-        return ("\ufeff" + output.getvalue()).encode("utf-8")
 
     def export_binary_xlsx(self, batch_id: str) -> bytes:
         batch = self.load(batch_id)

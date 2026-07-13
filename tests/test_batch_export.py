@@ -50,10 +50,13 @@ class BatchExportTest(unittest.TestCase):
             exporter.storage_root = storage
 
             data = exporter.export_binary_xlsx(batch_id)
+            self.assertTrue(data.startswith(b"PK\x03\x04"))
             with zipfile.ZipFile(BytesIO(data)) as archive:
                 sheet = ElementTree.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+                workbook = ElementTree.fromstring(archive.read("xl/workbook.xml"))
 
             namespace = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+            self.assertEqual(workbook.find("m:sheets/m:sheet", namespace).attrib["name"], "Summary")
             self.assertEqual(sheet.find("m:dimension", namespace).attrib["ref"], "A1:CR2")
             self.assertEqual(sheet.find("m:autoFilter", namespace).attrib["ref"], "A1:CR2")
             headers = [
