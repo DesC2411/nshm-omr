@@ -5,6 +5,7 @@ import io
 import json
 import zipfile
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -117,21 +118,111 @@ class BatchProcessor:
             raise FileNotFoundError(filename)
         return path
 
+    def apply_score_config(
+        self,
+        batch_id: str,
+        config: dict[str, Any],
+    ) -> dict[str, Any]:
+        batch = self.load(batch_id)
+        batch["score_config"] = config
+        for page in batch["pages"]:
+            page["review_score"] = self.calculate_page_score(page, config)
+        path = self._batch_dir(batch_id) / "results.json"
+        path.write_text(json.dumps(batch, ensure_ascii=False, indent=2), encoding="utf-8")
+        return batch
+
+    @classmethod
+    def calculate_page_score(
+        cls,
+        page: dict[str, Any],
+        config: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if page.get("status") == "rejected" or not page.get("sections"):
+            return None
+        if any(
+            "Không có đáp án cho mã đề" in reason
+            for reason in page.get("review_reasons", [])
+        ):
+            return None
+
+        sections = page["sections"]
+        part1_items = sections.get("section1", [])
+        part2_items = sections.get("section2", [])
+        part3_items = sections.get("section3", [])
+        part1_unit = Decimal(str(config["section1_per_correct"]))
+        part3_unit = Decimal(str(config["section3_per_correct"]))
+        part2_rules = {
+            int(correct): Decimal(str(score))
+            for correct, score in config["section2_by_correct"].items()
+        }
+
+        part1_correct = sum(bool(item.get("correct")) for item in part1_items)
+        part3_correct = sum(bool(item.get("correct")) for item in part3_items)
+        part1_score = Decimal(part1_correct) * part1_unit
+        part1_max = Decimal(len(part1_items)) * part1_unit
+        part3_score = Decimal(part3_correct) * part3_unit
+        part3_max = Decimal(len(part3_items)) * part3_unit
+
+        part2_questions: list[dict[str, Any]] = []
+        question_numbers = sorted({int(item["question"]) for item in part2_items})
+        part2_score = Decimal("0")
+        for question in question_numbers:
+            correct_count = sum(
+                bool(item.get("correct"))
+                for item in part2_items
+                if int(item["question"]) == question
+            )
+            question_score = part2_rules.get(correct_count, Decimal("0"))
+            part2_score += question_score
+            part2_questions.append(
+                {
+                    "question": question,
+                    "correct": correct_count,
+                    "score": cls._decimal_number(question_score),
+                }
+            )
+        part2_max = Decimal(len(question_numbers)) * part2_rules.get(4, Decimal("0"))
+        total = part1_score + part2_score + part3_score
+        max_score = part1_max + part2_max + part3_max
+        return {
+            "section1": cls._decimal_number(part1_score),
+            "section1_max": cls._decimal_number(part1_max),
+            "section2": cls._decimal_number(part2_score),
+            "section2_max": cls._decimal_number(part2_max),
+            "section2_questions": part2_questions,
+            "section3": cls._decimal_number(part3_score),
+            "section3_max": cls._decimal_number(part3_max),
+            "total": cls._decimal_number(total),
+            "max_score": cls._decimal_number(max_score),
+        }
+
+    @staticmethod
+    def _decimal_number(value: Decimal) -> int | float:
+        normalized = value.quantize(Decimal("0.0001")).normalize()
+        if normalized == normalized.to_integral():
+            return int(normalized)
+        return float(normalized)
+
     def export_binary_xlsx(self, batch_id: str) -> bytes:
         batch = self.load(batch_id)
         headers = self._binary_headers()
         rows: list[list[Any]] = []
         for page in batch["pages"]:
             sections = page["sections"]
-            binary = [int(item.get("correct", False)) for item in sections["section1"]]
-            binary += [int(item.get("correct", False)) for item in sections["section2"]]
-            binary += [int(item.get("correct", False)) for item in sections["section3"]]
-            binary += [""] * (78 - len(binary))
+            part1_binary = [int(item.get("correct", False)) for item in sections["section1"]]
+            part2_binary = [int(item.get("correct", False)) for item in sections["section2"]]
+            part3_binary = [int(item.get("correct", False)) for item in sections["section3"]]
+            binary = (
+                (part1_binary + [""] * 40)[:40]
+                + (part2_binary + [""] * 32)[:32]
+                + (part3_binary + [""] * 6)[:6]
+            )
             totals = page.get("totals") or {}
             part1 = totals.get("section1") or {}
             part2 = totals.get("section2") or {}
             part3 = totals.get("section3") or {}
             overall = totals.get("overall") or {}
+            review_score = page.get("review_score")
             status = {"accepted": "ok", "review": "review", "rejected": "error"}.get(
                 page["status"], page["status"]
             )
@@ -148,14 +239,14 @@ class BatchProcessor:
                     page["student_id"],
                     page["exam_code"],
                     *binary[:78],
-                    part1.get("correct", ""),
-                    part1.get("total", ""),
-                    part2.get("correct", ""),
-                    part2.get("total", ""),
-                    part3.get("correct", ""),
-                    part3.get("total", ""),
-                    overall.get("correct", ""),
-                    overall.get("total", ""),
+                    review_score["section1"] if review_score else part1.get("correct", ""),
+                    review_score["section1_max"] if review_score else part1.get("total", ""),
+                    review_score["section2"] if review_score else part2.get("correct", ""),
+                    review_score["section2_max"] if review_score else part2.get("total", ""),
+                    review_score["section3"] if review_score else part3.get("correct", ""),
+                    review_score["section3_max"] if review_score else part3.get("total", ""),
+                    review_score["total"] if review_score else overall.get("correct", ""),
+                    review_score["max_score"] if review_score else overall.get("total", ""),
                 ]
             )
         return self._write_xlsx(headers, rows)
@@ -311,6 +402,10 @@ class BatchProcessor:
         section2 = clean(result["section2"])
         section3 = clean(result["section3"])
         section1_answers = "".join(item["selected"] if item["selected"] != "-" else "-" for item in section1)
+        section2_question_count = max(
+            (item["question"] for item in section2),
+            default=0,
+        )
         section2_answers = " / ".join(
             "".join(
                 next(
@@ -323,7 +418,7 @@ class BatchProcessor:
                 )
                 for statement in "abcd"
             )
-            for question in range(1, 9)
+            for question in range(1, section2_question_count + 1)
         )
         section3_answers = " / ".join(item["selected"] for item in section3)
         return {

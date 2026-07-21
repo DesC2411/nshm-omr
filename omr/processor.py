@@ -645,7 +645,7 @@ class OMRProcessor:
     ) -> tuple[list[dict[str, Any]], int]:
         items: list[dict[str, Any]] = []
         correct = 0
-        for index, question in enumerate(self.template.section1, start=1):
+        for index, question in enumerate(self.template.section1[:len(answer_key)], start=1):
             scores = {label: self._bubble_score(score_maps, bubble) for label, bubble in question.items()}
             selected, status = self._pick_single(scores, calibration)
             expected = answer_key[index - 1]
@@ -671,7 +671,7 @@ class OMRProcessor:
     ) -> tuple[list[dict[str, Any]], int]:
         items: list[dict[str, Any]] = []
         correct = 0
-        for question_index, question in enumerate(self.template.section2, start=1):
+        for question_index, question in enumerate(self.template.section2[:len(answer_key)], start=1):
             for statement_index, statement in enumerate("abcd"):
                 options = question[statement]
                 scores = {label: self._bubble_score(score_maps, bubble) for label, bubble in options.items()}
@@ -700,7 +700,7 @@ class OMRProcessor:
     ) -> tuple[list[dict[str, Any]], int]:
         items: list[dict[str, Any]] = []
         correct = 0
-        for question_index, question in enumerate(self.template.section3, start=1):
+        for question_index, question in enumerate(self.template.section3[:len(answer_key)], start=1):
             positions: list[str] = []
             statuses: list[str] = []
             for column in question:

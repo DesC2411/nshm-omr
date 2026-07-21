@@ -3,11 +3,12 @@ from __future__ import annotations
 import os
 import re
 import sys
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, abort, jsonify, render_template, request, send_file
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, url_for
 
 from omr import OMRProcessor
 from omr.batch import BatchProcessor
@@ -32,12 +33,17 @@ app = Flask(
 app.config["MAX_CONTENT_LENGTH"] = 250 * 1024 * 1024
 processor = OMRProcessor(TEMPLATE_PATH)
 batch_processor = BatchProcessor(processor, DATA_DIR / "batches")
+DEFAULT_SCORE_CONFIG = {
+    "section1_per_correct": 0.25,
+    "section2_by_correct": {"1": 0.1, "2": 0.25, "3": 0.5, "4": 1.0},
+    "section3_per_correct": 0.5,
+}
 
 
 def parse_section1(raw: str) -> list[str]:
     answers = re.findall(r"[ABCD]", raw.upper())
-    if len(answers) != 40:
-        raise ValueError("Phan I can dung 40 dap an A/B/C/D.")
+    if len(answers) > 40:
+        raise ValueError("Phần I chỉ nhận tối đa 40 đáp án A/B/C/D.")
     return answers
 
 
@@ -57,8 +63,8 @@ def _normalize_tf_line(line: str) -> str:
 
 def parse_section2(raw: str) -> list[list[str]]:
     lines = [line for line in (item.strip() for item in raw.splitlines()) if line]
-    if len(lines) != 8:
-        raise ValueError("Phan II can 8 dong, moi dong ung voi 1 cau.")
+    if len(lines) > 8:
+        raise ValueError("Phần II chỉ nhận tối đa 8 dòng, mỗi dòng ứng với 1 câu.")
     return [list(_normalize_tf_line(line)) for line in lines]
 
 
@@ -77,17 +83,20 @@ def _normalize_short_answer(value: str) -> str:
 
 def parse_section3(raw: str) -> list[str]:
     lines = [line for line in (item.strip() for item in raw.splitlines()) if line]
-    if len(lines) != 6:
-        raise ValueError("Phan III can 6 dong, moi dong ung voi 1 cau.")
+    if len(lines) > 6:
+        raise ValueError("Phần III chỉ nhận tối đa 6 dòng, mỗi dòng ứng với 1 câu.")
     return [_normalize_short_answer(line) for line in lines]
 
 
 def parse_answer_key(form_data) -> dict[str, list]:
-    return {
+    answer_key = {
         "section1": parse_section1(form_data.get("section1", "")),
         "section2": parse_section2(form_data.get("section2", "")),
         "section3": parse_section3(form_data.get("section3", "")),
     }
+    if not any(answer_key.values()):
+        raise ValueError("Cần nhập ít nhất một đáp án ở một trong ba phần.")
+    return answer_key
 
 
 def parse_answer_keys(form_data) -> dict[str, dict[str, list]]:
@@ -111,16 +120,51 @@ def parse_answer_keys(form_data) -> dict[str, dict[str, list]]:
         if code in answer_keys:
             raise ValueError(f"Mã đề {code} đang bị nhập trùng.")
         try:
-            answer_keys[code] = {
+            answer_key = {
                 "section1": parse_section1(section1_values[index]),
                 "section2": parse_section2(section2_values[index]),
                 "section3": parse_section3(section3_values[index]),
             }
+            if not any(answer_key.values()):
+                raise ValueError("Cần nhập ít nhất một đáp án ở một trong ba phần.")
+            answer_keys[code] = answer_key
         except (IndexError, ValueError) as error:
             raise ValueError(f"Mã đề {code}: {error}") from error
     if not answer_keys:
         raise ValueError("Cần nhập ít nhất một bộ đáp án.")
     return answer_keys
+
+
+def _parse_score_value(form_data, field: str, label: str) -> float:
+    raw = str(form_data.get(field, "")).strip().replace(",", ".")
+    try:
+        value = Decimal(raw)
+    except InvalidOperation as error:
+        raise ValueError(f"{label} phải là một số hợp lệ.") from error
+    if not value.is_finite() or value < 0:
+        raise ValueError(f"{label} phải lớn hơn hoặc bằng 0.")
+    return float(value)
+
+
+def parse_score_config(form_data) -> dict[str, Any]:
+    section2_scores = [
+        _parse_score_value(form_data, f"section2_{count}", f"Phần II · đúng {count} ý")
+        for count in range(1, 5)
+    ]
+    if section2_scores != sorted(section2_scores):
+        raise ValueError("Điểm Phần II phải tăng dần theo số ý đúng.")
+    return {
+        "section1_per_correct": _parse_score_value(
+            form_data, "section1_per_correct", "Điểm mỗi câu Phần I"
+        ),
+        "section2_by_correct": {
+            str(count): score
+            for count, score in enumerate(section2_scores, start=1)
+        },
+        "section3_per_correct": _parse_score_value(
+            form_data, "section3_per_correct", "Điểm mỗi câu Phần III"
+        ),
+    }
 
 
 def build_ssl_context() -> Any:
@@ -239,6 +283,34 @@ def batch_result(batch_id: str):
     except FileNotFoundError:
         abort(404)
     return render_template("batch_result.html", batch=batch)
+
+
+@app.route("/batch/<batch_id>/score", methods=["GET", "POST"])
+def batch_score_review(batch_id: str):
+    try:
+        batch = batch_processor.load(batch_id)
+    except FileNotFoundError:
+        abort(404)
+
+    error = None
+    if request.method == "POST":
+        try:
+            config = parse_score_config(request.form)
+            batch_processor.apply_score_config(batch_id, config)
+            return redirect(url_for("batch_score_review", batch_id=batch_id, saved="1"))
+        except ValueError as caught:
+            error = str(caught)
+
+    config = batch.get("score_config") or DEFAULT_SCORE_CONFIG
+    for page in batch["pages"]:
+        page["score_preview"] = batch_processor.calculate_page_score(page, config)
+    return render_template(
+        "score_review.html",
+        batch=batch,
+        score_config=config,
+        error=error,
+        saved=request.args.get("saved") == "1",
+    )
 
 
 @app.get("/batch/<batch_id>/asset/<filename>")

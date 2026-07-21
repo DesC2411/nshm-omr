@@ -54,10 +54,10 @@
         {% for key in exam_keys %}
           <section class="key-set{% if loop.first %} active{% endif %}" data-key-panel="{{ loop.index0 }}">
             <div class="code-row"><label class="field"><span>Mã đề · đúng 4 chữ số</span><input class="exam-code-input" name="exam_code" value="{{ key.code }}" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required></label>{% if not loop.first %}<button class="remove-key" type="button">Xóa mã</button>{% endif %}</div>
-            <label class="field full"><span>Phần I · 40 câu A/B/C/D</span><textarea name="section1" rows="4" spellcheck="false" required>{{ key.section1 }}</textarea><small>Có thể phân cách bằng dấu cách, dấu phẩy hoặc xuống dòng.</small></label>
+            <label class="field full"><span>Phần I · tối đa 40 câu A/B/C/D</span><textarea name="section1" rows="4" spellcheck="false">{{ key.section1 }}</textarea><small>Chỉ nhập số câu có trong đề; có thể phân cách bằng dấu cách, dấu phẩy hoặc xuống dòng.</small></label>
             <div class="key-grid">
-              <label class="field"><span>Phần II · 8 dòng Đúng/Sai</span><textarea name="section2" rows="9" spellcheck="false" required>{{ key.section2 }}</textarea><small>Mỗi dòng 4 ký tự D hoặc S theo a–d.</small></label>
-              <label class="field"><span>Phần III · 6 đáp án ngắn</span><textarea name="section3" rows="9" spellcheck="false" required>{{ key.section3 }}</textarea><small>Hỗ trợ số âm và dấu phẩy thập phân.</small></label>
+              <label class="field"><span>Phần II · tối đa 8 câu Đúng/Sai</span><textarea name="section2" rows="9" spellcheck="false">{{ key.section2 }}</textarea><small>Mỗi câu là một dòng gồm 4 ký tự D hoặc S theo a–d.</small></label>
+              <label class="field"><span>Phần III · tối đa 6 đáp án ngắn</span><textarea name="section3" rows="9" spellcheck="false">{{ key.section3 }}</textarea><small>Chỉ nhập số câu có trong đề; hỗ trợ số âm và dấu phẩy thập phân.</small></label>
             </div>
           </section>
         {% endfor %}

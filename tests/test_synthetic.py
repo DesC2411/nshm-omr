@@ -142,6 +142,23 @@ class SyntheticOMRTest(unittest.TestCase):
         self.assertEqual(result["totals"]["section3"]["correct"], 6)
         self.assertEqual(result["totals"]["overall"]["correct"], 78)
 
+    def test_grade_shorter_exam_uses_only_configured_questions(self) -> None:
+        processor = OMRProcessor(TEMPLATE_PATH)
+        full_key = self._answer_key()
+        answer_key = {
+            "section1": full_key["section1"][:20],
+            "section2": full_key["section2"][:4],
+            "section3": full_key["section3"][:3],
+        }
+
+        synthetic_image = render_synthetic_sheet(processor, answer_key)
+        result = processor.grade(synthetic_image, answer_key)
+
+        self.assertEqual(result["totals"]["section1"], {"correct": 20, "total": 20})
+        self.assertEqual(result["totals"]["section2"], {"correct": 16, "total": 16})
+        self.assertEqual(result["totals"]["section3"], {"correct": 3, "total": 3})
+        self.assertEqual(result["totals"]["overall"], {"correct": 39, "total": 39})
+
     def test_grade_synthetic_sheet_with_lighting_noise(self) -> None:
         processor = OMRProcessor(TEMPLATE_PATH)
         answer_key = self._answer_key()

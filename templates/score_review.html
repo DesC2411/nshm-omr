@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Review điểm {{ batch.filename }} · NSHM OMR</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+<main class="app-shell score-review-shell">
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='nshm-logo.png') }}" alt="Phù hiệu NSHM"><span><strong>NSHM OMR</strong><small>Chấm thi nội bộ</small></span></a>
+    <div class="header-actions"><a class="secondary-action" href="{{ url_for('batch_result', batch_id=batch.id) }}">Quay lại kết quả</a><a class="export-action" href="{{ url_for('batch_export_binary', batch_id=batch.id) }}">Xuất Excel</a></div>
+  </header>
+
+  {% if error %}<div class="alert"><strong>Không thể lưu:</strong> {{ error }}</div>{% endif %}
+  {% if saved %}<div class="success-alert"><strong>Đã lưu cấu hình điểm.</strong> File Excel của lô bài đã sử dụng thang điểm này.</div>{% endif %}
+
+  <section class="score-review-hero">
+    <div><p class="kicker">REVIEW ĐIỂM</p><h1>{{ batch.filename }}</h1><p>Tính lại điểm từ kết quả đúng/sai đã nhận diện, không cần quét lại PDF.</p></div>
+    <div class="review-facts"><span><b>{{ batch.page_count }}</b> bài</span><span><b>{{ batch.exam_codes|length }}</b> mã đề</span><span><b>{% if batch.score_config %}Đã lưu{% else %}Xem trước{% endif %}</b> cấu hình</span></div>
+  </section>
+
+  <form class="score-config" method="post">
+    <div class="score-config-head"><div><p class="kicker">QUY TẮC TÍNH</p><h2>Cấu hình điểm từng phần</h2></div><button class="primary-save" type="submit">Lưu và tính lại</button></div>
+    <div class="score-rule-grid">
+      <section class="score-rule-card">
+        <span class="rule-number">I</span><div><h3>Trắc nghiệm 4 đáp án</h3><p>Mỗi câu trả lời đúng nhận cùng một mức điểm.</p><label class="score-input"><span>Điểm / câu đúng</span><input name="section1_per_correct" type="number" min="0" step="0.01" required value="{{ score_config.section1_per_correct }}"></label></div>
+      </section>
+      <section class="score-rule-card wide">
+        <span class="rule-number">II</span><div><h3>Trắc nghiệm Đúng/Sai</h3><p>Mỗi câu có 4 ý a–d; điểm phụ thuộc số ý đúng trong câu.</p><div class="tf-score-grid">
+          {% for count in range(1, 5) %}<label class="score-input"><span>Đúng {{ count }} ý</span><input name="section2_{{ count }}" type="number" min="0" step="0.01" required value="{{ score_config.section2_by_correct[count|string] }}"></label>{% endfor %}
+        </div></div>
+      </section>
+      <section class="score-rule-card">
+        <span class="rule-number">III</span><div><h3>Trả lời ngắn</h3><p>Mỗi câu trả lời đúng nhận cùng một mức điểm.</p><label class="score-input"><span>Điểm / câu đúng</span><input name="section3_per_correct" type="number" min="0" step="0.01" required value="{{ score_config.section3_per_correct }}"></label></div>
+      </section>
+    </div>
+  </form>
+
+  <section class="score-table-panel">
+    <div class="score-table-head"><div><p class="kicker">BẢNG ĐIỂM</p><h2>Kết quả theo cấu hình hiện tại</h2></div><small>Bài thiếu đáp án mã đề hoặc bị từ chối sẽ không tự tính.</small></div>
+    <div class="score-table-wrap"><table class="score-table">
+      <thead><tr><th>Trang</th><th>SBD</th><th>Mã đề</th><th>Phần I</th><th>Phần II</th><th>Chi tiết Phần II</th><th>Phần III</th><th>Tổng điểm</th></tr></thead>
+      <tbody>{% for page in batch.pages %}{% set score = page.score_preview %}<tr class="status-{{ page.status }}">
+        <td>{{ page.page }}</td><td><strong>{{ page.student_id }}</strong></td><td>{{ page.exam_code }}</td>
+        {% if score %}
+          <td>{{ score.section1 }} / {{ score.section1_max }}</td><td>{{ score.section2 }} / {{ score.section2_max }}</td>
+          <td><div class="tf-breakdown">{% for item in score.section2_questions %}<span>C{{ item.question }}: {{ item.correct }}/4 <b>+{{ item.score }}</b></span>{% else %}<span>Không sử dụng</span>{% endfor %}</div></td>
+          <td>{{ score.section3 }} / {{ score.section3_max }}</td><td class="final-score"><b>{{ score.total }}</b><span>/ {{ score.max_score }}</span></td>
+        {% else %}<td colspan="5" class="score-unavailable">Không thể tự tính điểm cho bài này</td>{% endif %}
+      </tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+
+  <footer class="copyright"><span>Bản quyền © <a href="https://www.facebook.com/desc2411" target="_blank" rel="noopener noreferrer">Nguyễn Trường Chinh</a></span></footer>
+</main>
+</body>
+</html>

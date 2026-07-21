@@ -11,7 +11,7 @@
 <main class="app-shell result-shell">
   <header class="topbar">
     <a class="brand" href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='nshm-logo.png') }}" alt="Phù hiệu NSHM"><span><strong>NSHM OMR</strong><small>Chấm thi nội bộ</small></span></a>
-    <div class="header-actions"><a class="secondary-action" href="{{ url_for('index') }}">Chấm file khác</a><a class="export-action" href="{{ url_for('batch_export_binary', batch_id=batch.id) }}">Xuất Excel 0/1 (.xlsx)</a></div>
+    <div class="header-actions"><a class="secondary-action" href="{{ url_for('index') }}">Chấm file khác</a><a class="secondary-action" href="{{ url_for('batch_score_review', batch_id=batch.id) }}">Review điểm</a><a class="export-action" href="{{ url_for('batch_export_binary', batch_id=batch.id) }}">Xuất Excel 0/1 (.xlsx)</a></div>
   </header>
 
   <section class="result-hero">
@@ -39,7 +39,7 @@
       <div class="page-data">
         <div class="page-data-head">
           <div><span class="status-badge">{% if page.status == 'accepted' %}Đạt kiểm tra{% elif page.status == 'review' %}Cần xem lại{% else %}Bị từ chối{% endif %}</span><h2>Học sinh {{ page.student_id }}</h2><p>Mã đề <strong>{{ page.exam_code }}</strong></p></div>
-          <div class="score-block"><b>{{ page.score_10 if page.score_10 is not none else '—' }}</b><span>điểm</span></div>
+          <div class="score-block">{% if page.review_score %}<b>{{ page.review_score.total }}</b><span>/ {{ page.review_score.max_score }} điểm cấu hình</span>{% else %}<b>{{ page.score_10 if page.score_10 is not none else '—' }}</b><span>điểm quy đổi / 10</span>{% endif %}</div>
         </div>
         {% if page.review_reasons %}<div class="review-note"><b>Lý do kiểm tra</b>{% for reason in page.review_reasons %}<span>{{ reason }}</span>{% endfor %}</div>{% endif %}
         <div class="answer-summary"><div><span>Phần I</span><code>{{ page.section1_answers }}</code></div><div><span>Phần II</span><code>{{ page.section2_answers }}</code></div><div><span>Phần III</span><code>{{ page.section3_answers }}</code></div></div>
